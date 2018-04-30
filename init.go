@@ -5,5 +5,5 @@ import (
 )
 
 func init() {
-  flag.StringVar(&FlagFilters, "filters", "", "Filters to apply separated by ,")
+	flag.StringVar(&FlagFilters, "filters", "", "Filters to apply separated by ,")
 }
