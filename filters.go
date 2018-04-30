@@ -8,6 +8,7 @@ import (
 )
 
 var FlagFilters string
+var FlagTemplate string
 
 func parseFilters(str string) (*filters.Args, error) {
 	args := filters.NewArgs()
