@@ -43,7 +43,7 @@ func main() {
 
 	cli, err := client.NewEnvClient()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, errors.Wrap(err, "Error creating new docker client").Error())
+		fmt.Fprintln(os.Stderr, errors.Wrap(err, "Error creating new docker client").Error())
 		os.Exit(1)
 	}
 
@@ -55,13 +55,13 @@ func main() {
 
 	containers, err := inspectContainers(cli, myFilters)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, err.Error())
+		fmt.Fprintln(os.Stderr, err.Error())
 		os.Exit(1)
 	}
 
 	payload, err := json.Marshal(containers)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, errors.Wrap(err, "Error marshaling to json").Error())
+		fmt.Fprintln(os.Stderr, errors.Wrap(err, "Error marshaling to json").Error())
 		os.Exit(1)
 	}
 
