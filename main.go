@@ -53,9 +53,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{
-		Filters: *myFilters,
-	})
+	containers, err := inspectContainers(cli, myFilters)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, err.Error())
 		os.Exit(1)
@@ -68,4 +66,27 @@ func main() {
 	}
 
 	fmt.Println(string(payload[:]))
+}
+
+func inspectContainers(cli *client.Client, myFilters *filters.Args) ([]types.ContainerJSON, error) {
+	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{
+		Filters: *myFilters,
+	})
+
+	if err != nil {
+		return nil, errors.Wrap(err, "Error listing containers")
+	}
+
+	cjs := make([]types.ContainerJSON, 0)
+
+	for _, container := range containers {
+		cj, err := cli.ContainerInspect(context.Background(), container.ID)
+		if err != nil {
+			return nil, errors.Wrapf(err, "Error inspecting container %d", container.ID)
+		}
+
+		cjs = append(cjs, cj)
+	}
+
+	return cjs, nil
 }
