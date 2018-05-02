@@ -12,6 +12,7 @@ import (
 	"flag"
 	"strings"
 	"net/url"
+	"os/exec"
 )
 
 var FlagFilters string
@@ -38,8 +39,43 @@ func parseFilters(str string) (*filters.Args, error) {
 	return &args, nil
 }
 
+func getApiVersion() (string, error) {
+	cmd := exec.Command("docker", "version", "-f {{ .Server.MinAPIVersion | json }}")
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", errors.Wrapf(err, "Combined Output: \t%s", string(output[:]))
+	}
+
+	return string(output[2:len(output) - 2]), nil
+}
+
+func setVersionEnv() (error) {
+	if version := os.Getenv("DOCKER_API_VERSION"); version != "" {
+		return nil
+	}
+
+	version, err := getApiVersion()
+	if err != nil {
+		return errors.Wrap(err, "Error getting the version of docker server")
+	}
+
+	err = os.Setenv("DOCKER_API_VERSION", version)
+	if err != nil {
+		return errors.Wrap(err, "Error setting the environment DOCKER_API_VERSION")
+	}
+
+	return nil
+}
+
 func main() {
 	flag.Parse()
+
+	err := setVersionEnv()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
 
 	cli, err := client.NewEnvClient()
 	if err != nil {
