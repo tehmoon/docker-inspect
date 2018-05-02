@@ -47,13 +47,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	dockerFilters, err := parseFilters(FlagFilters)
+	myFilters, err := parseFilters(FlagFilters)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, errors.Wrap(err, "Error parsing filters"))
+		fmt.Fprintln(os.Stderr, errors.Wrap(err, "Error parsing filters").Error())
+		os.Exit(1)
 	}
 
 	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{
-		Filters: *dockerFilters,
+		Filters: *myFilters,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, err.Error())
