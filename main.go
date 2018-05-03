@@ -10,21 +10,31 @@ import (
 	"fmt"
 	"os"
 	"flag"
-	"strings"
 	"net/url"
 	"os/exec"
 )
 
-var FlagFilters string
+var FlagFilters = ValueFlagStringArray{}
 
-func init() {
-	flag.StringVar(&FlagFilters, "filters", "", "Filters to apply separated by ,")
+type ValueFlagStringArray []string
+
+func (vfsa ValueFlagStringArray) String() (string) {
+	return ""
 }
 
-func parseFilters(str string) (*filters.Args, error) {
+func (vfsa *ValueFlagStringArray) Set(value string) (error) {
+	*vfsa = append(*vfsa, value)
+
+	return nil
+}
+
+func init() {
+	flag.Var(&FlagFilters, "filter", "Filter to pass to docker. Can be repeated.")
+}
+
+func newFilters(fs []string) (*filters.Args, error) {
 	args := filters.NewArgs()
 
-	fs := strings.Split(str, ",")
 	for _, f := range fs {
 		values, err := url.ParseQuery(f)
 		if err != nil {
@@ -83,9 +93,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	myFilters, err := parseFilters(FlagFilters)
+	myFilters, err := newFilters(FlagFilters)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, errors.Wrap(err, "Error parsing filters").Error())
+		fmt.Fprintln(os.Stderr, errors.Wrap(err, "Error building filters").Error())
 		os.Exit(1)
 	}
 
