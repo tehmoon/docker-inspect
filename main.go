@@ -10,21 +10,48 @@ import (
 	"fmt"
 	"os"
 	"flag"
-	"strings"
 	"net/url"
 	"os/exec"
+	"text/template"
+	"bytes"
+	"io"
 )
 
-var FlagFilters string
+var (
+	FlagFilters = ValueFlagStringArray{}
+	FlagTemplates = ValueFlagStringArray{}
+	jsonFunc = template.FuncMap{
+		"json": func(d interface{}) string {
+			payload, err := json.Marshal(d)
+			if err != nil {
+				return ""
+			}
 
-func init() {
-	flag.StringVar(&FlagFilters, "filters", "", "Filters to apply separated by ,")
+			return string(payload[:])
+		},
+	}
+)
+
+type ValueFlagStringArray []string
+
+func (vfsa ValueFlagStringArray) String() (string) {
+	return ""
 }
 
-func parseFilters(str string) (*filters.Args, error) {
+func (vfsa *ValueFlagStringArray) Set(value string) (error) {
+	*vfsa = append(*vfsa, value)
+
+	return nil
+}
+
+func init() {
+	flag.Var(&FlagFilters, "filter", "Filter to pass to docker. Can be repeated.")
+	flag.Var(&FlagTemplates, "template", "JSON template to pass to docker inspect")
+}
+
+func newFilters(fs []string) (*filters.Args, error) {
 	args := filters.NewArgs()
 
-	fs := strings.Split(str, ",")
 	for _, f := range fs {
 		values, err := url.ParseQuery(f)
 		if err != nil {
@@ -83,9 +110,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	myFilters, err := parseFilters(FlagFilters)
+	myFilters, err := newFilters(FlagFilters)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, errors.Wrap(err, "Error parsing filters").Error())
+		fmt.Fprintln(os.Stderr, errors.Wrap(err, "Error building filters").Error())
 		os.Exit(1)
 	}
 
@@ -95,13 +122,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	payload, err := json.Marshal(containers)
+	templates, err := newTemplates(FlagTemplates)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, errors.Wrap(err, "Error marshaling to json").Error())
+		fmt.Fprintf(os.Stderr, err.Error())
 		os.Exit(1)
 	}
 
-	fmt.Println(string(payload[:]))
+	err = outputTemplates(templates, containers, os.Stdout)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		os.Exit(1)
+	}
 }
 
 func inspectContainers(cli *client.Client, myFilters *filters.Args) ([]types.ContainerJSON, error) {
@@ -125,4 +156,69 @@ func inspectContainers(cli *client.Client, myFilters *filters.Args) ([]types.Con
 	}
 
 	return cjs, nil
+}
+
+func newTemplates(templates []string) ([]*template.Template, error) {
+	tt := make([]*template.Template, 0)
+
+	if len(templates) == 0 {
+		templates = append(templates, "{{ . | json }}")
+	}
+
+	for i, tmpl := range templates {
+		name := fmt.Sprintf("main_%d", i)
+
+		t, err := template.New(name).Funcs(jsonFunc).Parse(tmpl)
+		if err != nil {
+			return nil, errors.Wrap(err, "Error parsing template")
+		}
+
+		tt = append(tt, t)
+	}
+
+	return tt, nil
+}
+
+func outputTemplate(tmpl *template.Template, containers []types.ContainerJSON, writer io.Writer) (error) {
+	enc := json.NewEncoder(writer)
+
+	array := make([]interface{}, 0)
+	buf := bytes.NewBuffer([]byte{})
+
+	for _, container := range containers {
+		var v interface{}
+		buf.Reset()
+
+		err := tmpl.Execute(buf, container)
+		if err != nil {
+			return errors.Wrap(err, "Error executing the template")
+		}
+
+		err = json.Unmarshal(buf.Bytes(), &v)
+		if err != nil {
+			return errors.Wrap(err, "Error marshaling output template to JSON")
+		}
+
+		array = append(array, v)
+	}
+
+	err := enc.Encode(array)
+	if err != nil {
+		return errors.Wrap(err, "Error marshaling to json")
+	}
+
+	return nil
+}
+
+func outputTemplates(templates []*template.Template, containers []types.ContainerJSON, writer io.Writer) (error) {
+	var err error
+
+	for _, tmpl := range templates {
+		err = outputTemplate(tmpl, containers, writer)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
