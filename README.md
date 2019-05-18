@@ -1,3 +1,14 @@
+# ARCHIVED
+
+This is replaced by:
+
+```
+{ docker ps -q | \
+  xargs -L8 -P8 docker inspect
+} | jq '.'
+```
+
+
 # docker-inspect
 Use the docker API to inspect each container to stdout.
 
